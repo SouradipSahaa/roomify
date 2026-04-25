@@ -65,9 +65,13 @@ export default function App() {
     }
   }
 
-  useEffect(()=>{
-    refreshAuth()
-  },[]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void refreshAuth();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const signIn=async() =>{
     await puterSignIn();

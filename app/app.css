@@ -197,6 +197,10 @@
     .dropzone {
       @apply relative h-48 rounded-xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center cursor-pointer bg-zinc-50 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100;
 
+      &.is-disabled {
+        @apply cursor-not-allowed bg-zinc-100 border-zinc-200 opacity-70;
+      }
+
       &.is-dragging {
         @apply border-primary bg-orange-50;
 
@@ -207,6 +211,10 @@
 
       .drop-input {
         @apply absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10;
+      }
+
+      &.is-disabled .drop-input {
+        @apply cursor-not-allowed;
       }
 
       .drop-content {
