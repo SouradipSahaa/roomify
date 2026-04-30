@@ -16,7 +16,7 @@ const Upload =({onComplete}: UploadProps)=> {
     const[isDragging, setIsDragging] = useState(false);
     const[progress, setProgress] = useState(0);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const{isSignedIn}= useOutletContext<AuthContext>();
 
@@ -24,10 +24,12 @@ const Upload =({onComplete}: UploadProps)=> {
         return () => {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
+                intervalRef.current = null;
             }
 
-            if (redirectTimeoutRef.current) {
-                clearTimeout(redirectTimeoutRef.current);
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
             }
         };
     }, []);
@@ -38,9 +40,9 @@ const Upload =({onComplete}: UploadProps)=> {
             intervalRef.current = null;
         }
 
-        if (redirectTimeoutRef.current) {
-            clearTimeout(redirectTimeoutRef.current);
-            redirectTimeoutRef.current = null;
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
         }
     };
 
@@ -52,6 +54,10 @@ const Upload =({onComplete}: UploadProps)=> {
         setProgress(0);
 
         const reader = new FileReader();
+        reader.onerror =() => {
+            setFile(null);
+            setProgress(0);
+        };
 
         reader.onload = () => {
             const base64Data = typeof reader.result === "string" ? reader.result : "";
@@ -66,8 +72,14 @@ const Upload =({onComplete}: UploadProps)=> {
                             intervalRef.current = null;
                         }
 
-                        redirectTimeoutRef.current = setTimeout(() => {
+                        if (timeoutRef.current) {
+                            clearTimeout(timeoutRef.current);
+                            timeoutRef.current = null;
+                        }
+
+                        timeoutRef.current = setTimeout(() => {
                             onComplete?.(base64Data);
+                            timeoutRef.current = null;
                         }, REDIRECT_DELAY_MS);
                     }
 
@@ -101,8 +113,9 @@ const Upload =({onComplete}: UploadProps)=> {
         setIsDragging(false);
 
         const droppedFile = event.dataTransfer.files?.[0];
+        const allowedTypes = ["image/png", "image/jpeg"];
 
-        if (droppedFile) {
+        if (droppedFile && allowedTypes.includes(droppedFile.type)) {
             processFile(droppedFile);
         }
     };
