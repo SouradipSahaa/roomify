@@ -7,8 +7,6 @@ import {
     imageUrlToPngBlob,
     isHostedUrl
 } from "./utils";
-type HostingConfig={subdomain:string;};
-type HostedAsset={url: string};
 
 export const getOrCreateHostingConfig = async (): Promise<HostingConfig | null> => {
     const existing = (await puter.kv.get(HOSTING_CONFIG_KEY)) as HostingConfig | null;
@@ -63,5 +61,3 @@ export const uploadImageToHosting = async ({ hosting, url, projectId, label }: S
         return null;
     }
 }
-
-

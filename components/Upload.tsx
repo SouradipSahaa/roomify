@@ -1,24 +1,20 @@
-import {useEffect, useRef, useState, type ChangeEvent, type DragEvent} from 'react'
+import React, {useCallback, useEffect, useRef, useState} from 'react'
 import {useOutletContext} from "react-router";
 import {CheckCircle2, ImageIcon, UploadIcon} from "lucide-react";
-import {
-    PROGRESS_INCREMENT,
-    PROGRESS_INTERVAL_MS,
-    REDIRECT_DELAY_MS,
-} from "../lib/constants";
+import {PROGRESS_INCREMENT, REDIRECT_DELAY_MS, PROGRESS_INTERVAL_MS} from "../lib/constants";
 
-type UploadProps = {
+interface UploadProps {
     onComplete?: (base64Data: string) => void;
-};
+}
 
-const Upload =({onComplete}: UploadProps)=> {
-    const[file, setFile] = useState<File | null>(null);
-    const[isDragging, setIsDragging] = useState(false);
-    const[progress, setProgress] = useState(0);
-    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+const Upload = ({ onComplete }: UploadProps) => {
+    const [file, setFile] = useState<File | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const{isSignedIn}= useOutletContext<AuthContext>();
+    const { isSignedIn } = useOutletContext<AuthContext>();
 
     useEffect(() => {
         return () => {
@@ -26,7 +22,6 @@ const Upload =({onComplete}: UploadProps)=> {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
             }
-
             if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current);
                 timeoutRef.current = null;
@@ -34,109 +29,78 @@ const Upload =({onComplete}: UploadProps)=> {
         };
     }, []);
 
-    const resetUploadTimers = () => {
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            timeoutRef.current = null;
-        }
-    };
-
-    const processFile = (selectedFile: File) => {
+    const processFile = useCallback((file: File) => {
         if (!isSignedIn) return;
 
-        resetUploadTimers();
-        setFile(selectedFile);
+        setFile(file);
         setProgress(0);
 
         const reader = new FileReader();
-        reader.onerror =() => {
+        reader.onerror = () => {
             setFile(null);
             setProgress(0);
         };
-
-        reader.onload = () => {
-            const base64Data = typeof reader.result === "string" ? reader.result : "";
+        reader.onloadend = () => {
+            const base64Data = reader.result as string;
 
             intervalRef.current = setInterval(() => {
-                setProgress((currentProgress) => {
-                    const nextProgress = Math.min(currentProgress + PROGRESS_INCREMENT, 100);
-
-                    if (nextProgress === 100) {
+                setProgress((prev) => {
+                    const next = prev + PROGRESS_INCREMENT;
+                    if (next >= 100) {
                         if (intervalRef.current) {
                             clearInterval(intervalRef.current);
                             intervalRef.current = null;
                         }
-
-                        if (timeoutRef.current) {
-                            clearTimeout(timeoutRef.current);
-                            timeoutRef.current = null;
-                        }
-
                         timeoutRef.current = setTimeout(() => {
                             onComplete?.(base64Data);
                             timeoutRef.current = null;
                         }, REDIRECT_DELAY_MS);
+                        return 100;
                     }
-
-                    return nextProgress;
+                    return next;
                 });
             }, PROGRESS_INTERVAL_MS);
         };
+        reader.readAsDataURL(file);
+    }, [isSignedIn, onComplete]);
 
-        reader.readAsDataURL(selectedFile);
-    };
-
-    const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
         if (!isSignedIn) return;
         setIsDragging(true);
     };
 
-    const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-
-        if (!isSignedIn) return;
+    const handleDragLeave = () => {
         setIsDragging(false);
     };
 
-    const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
 
         if (!isSignedIn) return;
 
-        setIsDragging(false);
-
-        const droppedFile = event.dataTransfer.files?.[0];
-        const allowedTypes = ["image/png", "image/jpeg"];
-
+        const droppedFile = e.dataTransfer.files[0];
+        const allowedTypes = ['image/jpeg', 'image/png'];
         if (droppedFile && allowedTypes.includes(droppedFile.type)) {
             processFile(droppedFile);
         }
     };
 
-    const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!isSignedIn) return;
 
-        const selectedFile = event.target.files?.[0];
-
+        const selectedFile = e.target.files?.[0];
         if (selectedFile) {
             processFile(selectedFile);
         }
-
-        event.target.value = "";
     };
 
     return (
-        <div className={"upload"}>
+        <div className="upload">
             {!file ? (
                 <div
-                    className={`dropzone ${isDragging ? 'is-dragging' : ''} ${!isSignedIn ? 'is-disabled' : ''}`}
+                    className={`dropzone ${isDragging ? 'is-dragging' : ''}`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
@@ -144,39 +108,41 @@ const Upload =({onComplete}: UploadProps)=> {
                     <input
                         type="file"
                         className="drop-input"
-                        accept=".jpg,.jpeg,.png"
+                        accept=".jpg,.jpeg,.png,.webp"
                         disabled={!isSignedIn}
                         onChange={handleChange}
                     />
+
                     <div className="drop-content">
                         <div className="drop-icon">
                             <UploadIcon size={20} />
                         </div>
                         <p>
-                            {isSignedIn ? ("Click to upload or just drag and drop"):("Sign in or sign up with puter to upload")}
-
+                            {isSignedIn ? (
+                                "Click to upload or just drag and drop"
+                            ): ("Sign in or sign up with Puter to upload")}
                         </p>
-                        <p className="help"> Maximum file size 50 MB.</p>
+                        <p className="help">Maximum file size 50 MB.</p>
                     </div>
                 </div>
             ) : (
                 <div className="upload-status">
                     <div className="status-content">
                         <div className="status-icon">
-                            {progress == 100 ?(
-                                <CheckCircle2 className="check"/>
-                            ):(
-                                <ImageIcon className="image"/>
+                            {progress === 100 ? (
+                                <CheckCircle2 className="check" />
+                            ): (
+                                <ImageIcon className="image" />
                             )}
                         </div>
 
                         <h3>{file.name}</h3>
 
                         <div className='progress'>
-                            <div className="bar" style={{width: `${progress}%`}} />
+                            <div className="bar" style={{ width: `${progress}%` }} />
 
                             <p className="status-text">
-                                {progress <100 ? 'Analyzing Floor plan ...' : 'Redirecting...'}
+                                {progress < 100 ? 'Analyzing Floor Plan...' : 'Redirecting...'}
                             </p>
                         </div>
                     </div>
@@ -185,31 +151,4 @@ const Upload =({onComplete}: UploadProps)=> {
         </div>
     )
 }
-export default Upload;
-
-
-/*
-<div className={"upload"}>
-            {!file ? (
-                <div className={`dropzone ${isDragging ? 'is-dragging' : ''}`}>
-                    <input
-                        type="file"
-                        className="drop-input"
-                        accept=".jpg,.jpeg,.png"
-                        disabled={!isSignedIn}
-                        />
-                    <div className="drop-content">
-                        <div className="drop-icon">
-                            <UploadIcon size={20} />
-                        </div>
-                        <p>
-                            {isSignedIn ? ("Click to upload or just drag and drop"):("Sign in or sign up with puter to upload")}
-
-                        </p>
-                    </div>
-                    </div>
-            ) : (
-                <div>File</div>
-            )}
-        </div>
- */
+export default Upload
