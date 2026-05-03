@@ -1,45 +1,49 @@
-import {useLocation, useNavigate, useParams} from "react-router";
+import {useLocation, useNavigate, useOutletContext, useParams} from "react-router";
 import {useEffect, useRef, useState} from "react";
 import {generate3DView} from "../../lib/ai.action";
 import {Box, Download, RefreshCcw, Share2, X} from "lucide-react";
 import Button from "../../components/ui/Button";
-import {createProject, getProject} from "../../lib/puter.action";
+import {createProject, getProjectById} from "../../lib/puter.action";
+//import {createProject, getProject} from "../../lib/puter.action";
 const VisualizerId = () => {
 
     const { id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
+    const{userId}=useOutletContext<AuthContext>()
     const { initialImage, initialRender, name } = (location.state || {}) as VisualizerLocationState;
     const hasInitialGenerated = useRef(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [project, setProject] = useState<DesignItem | null>(null);
-    const [currentImage, setCurrentImage] = useState<string | null>(initialRender || null);
+    const [currentImage, setCurrentImage] = useState<string | null>( null);
+    const[isProjectLoading, setIsProjectLoading] = useState(true);
 
     const handleBack = () => navigate('/');
 
-    const runGeneration= async (sourceImage: string)=>{
-        try{
+    const runGeneration= async (item: DesignItem)=>{
+        if(!id||!item.sourceImage) return;
+        try {
             setIsProcessing(true);
-            const result = await generate3DView({sourceImage});
+            const result = await generate3DView({sourceImage: item.sourceImage});
 
-            if(result.renderedImage){
+            if (result.renderedImage) {
                 setCurrentImage(result.renderedImage);
-                const updatedProject = {
-                    ...(project || {
-                        id: id || Date.now().toString(),
-                        name: name || "Untitled Project",
-                        sourceImage,
-                        timestamp: Date.now(),
-                    }),
+                const updatedItem = {
+                    ... item,
                     renderedImage: result.renderedImage,
                     renderedPath: result.renderedPath,
                     timestamp: Date.now(),
-                };
+                    ownerId: item.ownerId ?? userId ?? null,
+                    isPublic: item.isPublic ?? false,
+                }
 
-                const savedProject = await createProject({ item: updatedProject });
-                if (savedProject) setProject(savedProject);
+                const saved = await createProject({item: updatedItem, visibility:"private"})
+                if (saved) {
+                    setProject(saved);
+                    setCurrentImage(saved.renderedImage || result.renderedImage);
+                }
             }
-        } catch(error){
+        }catch(error){
             console.error('generation failed', error)
         } finally{
             setIsProcessing(false);
@@ -51,41 +55,62 @@ const VisualizerId = () => {
         let isMounted = true;
 
         const loadProject = async () => {
-            if (!id) return;
-            const loadedProject = await getProject({ id });
-            if (!isMounted || !loadedProject) return;
-            setProject(loadedProject);
-            setCurrentImage(loadedProject.renderedImage || initialRender || null);
+            if (!id) {
+                setIsProjectLoading(false);
+                return;
+            }
+
+            if (initialImage) {
+                setProject({
+                    id,
+                    name,
+                    sourceImage: initialImage,
+                    renderedImage: initialRender || null,
+                    timestamp: Date.now(),
+                    ownerId: userId ?? null,
+                });
+                setCurrentImage(initialRender || null);
+                setIsProjectLoading(false);
+                hasInitialGenerated.current = false;
+                return;
+            }
+
+            setIsProjectLoading(true);
+
+            const fetchedProject = await getProjectById({ id });
+
+            if (!isMounted) return;
+
+            setProject(fetchedProject);
+            setCurrentImage(fetchedProject?.renderedImage || null);
+            setIsProjectLoading(false);
+            hasInitialGenerated.current = false;
         };
 
-        if (initialImage) {
-            setProject({
-                id: id || Date.now().toString(),
-                name,
-                sourceImage: initialImage,
-                renderedImage: initialRender || null,
-                timestamp: Date.now(),
-            });
-        } else {
-            loadProject();
-        }
+        loadProject();
 
         return () => {
             isMounted = false;
         };
-    },[id, initialImage, initialRender, name]);
+    }, [id, initialImage, initialRender, name, userId]);
 
     useEffect(() => {
-        const sourceImage = project?.sourceImage || initialImage;
-        if(!sourceImage || hasInitialGenerated.current) return;
-        if(project?.renderedImage || initialRender){
-            setCurrentImage(project?.renderedImage || initialRender || null);
+        if (
+            isProjectLoading ||
+            hasInitialGenerated.current ||
+            !project?.sourceImage
+        )
+            return;
+
+        if (project.renderedImage) {
+            setCurrentImage(project.renderedImage);
             hasInitialGenerated.current = true;
             return;
         }
+
         hasInitialGenerated.current = true;
-        runGeneration(sourceImage);
-    },[project, initialImage, initialRender]);
+        void runGeneration(project);
+    }, [project, isProjectLoading]);
 
     return(
 
@@ -108,7 +133,7 @@ const VisualizerId = () => {
                      <div className="panel-header">
                          <div className="panel-meta">
                              <p>Project</p>
-                             <h2>{project?.name || name || 'Untitled Project'}</h2>
+                             <h2>{project?.name || name || `Residence ${id}`}</h2>
                              <p className="note"> Created by You</p>
                          </div>
                          <div className="panel-actions">
@@ -133,8 +158,8 @@ const VisualizerId = () => {
                                      className="render-img"/>
                              ):(
                                  <div className="render-placeholder">
-                                     {(project?.sourceImage || initialImage) && (
-                                         <img src={project?.sourceImage || initialImage} alt="Original"
+                                     {(project?.sourceImage) && (
+                                         <img src={project?.sourceImage} alt="Original"
                                               className="render-fallback"/>
                                      )}
                                  </div>

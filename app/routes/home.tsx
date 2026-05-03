@@ -15,26 +15,27 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export default function Home() {
+export default function Home()
+{
 
   const navigate = useNavigate();
   const [projects, setProjects] = useState<DesignItem[]>([]);
-  const isCreatingProject = useRef(false);
+  const isCreatingProjectRef = useRef(false);
 
-  const handleUploadComplete = async (base64Image: string)=>{
-    if (isCreatingProject.current) return false;
-    isCreatingProject.current = true;
+  const handleUploadComplete = async (base64Image: string)=> {
+    if (isCreatingProjectRef.current) return false;
+    isCreatingProjectRef.current = true;
 
     const newId = Date.now().toString();
     const name = `Residence ${newId}`;
-    const localProject: DesignItem = {
+    const newItem = {
       id: newId,
       name,
       sourceImage: base64Image,
       timestamp: Date.now(),
     };
 
-    setProjects((current) => [localProject, ...current]);
+    setProjects((prev) => [newItem, ...prev]);
     navigate(`/visualizer/${newId}`, {
       state: {
         initialImage: base64Image,
@@ -43,33 +44,30 @@ export default function Home() {
       },
     });
 
-    createProject({ item: localProject })
-        .then((project) => {
-          if (!project) return;
-          setProjects((current) =>
-              current.map((item) => (item.id === project.id ? project : item)),
+    createProject({item: newItem, visibility: 'private'})
+        .then((saved) => {
+          if (!saved) return;
+          setProjects((prev) =>
+              prev.map((project) => (project.id === saved.id ? saved : project)),
           );
         })
         .catch((error) => {
           console.warn("Project save failed after navigation", error);
         })
         .finally(() => {
-          isCreatingProject.current = false;
+          isCreatingProjectRef.current = false;
         });
 
     return true;
-  }
+    };
+
 
   useEffect(() => {
-    let isMounted = true;
-
-    getProjects().then((loadedProjects) => {
-      if (isMounted) setProjects(loadedProjects);
-    });
-
-    return () => {
-      isMounted = false;
-    };
+    const fetchProjects= async() =>{
+      const items= await getProjects();
+       setProjects(items)
+      }
+     fetchProjects();
   }, []);
   return (
       <div className="home">
