@@ -4,6 +4,7 @@ import {generate3DView} from "../../lib/ai.action";
 import {Box, Download, RefreshCcw, Share2, X} from "lucide-react";
 import Button from "../../components/ui/Button";
 import {createProject, getProjectById} from "../../lib/puter.action";
+import {ReactCompareSlider, ReactCompareSliderImage} from "react-compare-slider";
 //import {createProject, getProject} from "../../lib/puter.action";
 const VisualizerId = () => {
 
@@ -19,6 +20,35 @@ const VisualizerId = () => {
     const[isProjectLoading, setIsProjectLoading] = useState(true);
 
     const handleBack = () => navigate('/');
+
+    const handleExport = async () => {
+        if (!currentImage) return;
+
+        const fileName = `roomify-${project?.id || id || 'render'}.png`;
+        const link = document.createElement('a');
+        let objectUrl: string | null = null;
+
+        try {
+            if (currentImage.startsWith('data:')) {
+                link.href = currentImage;
+            } else {
+                const response = await fetch(currentImage);
+                if (!response.ok) throw new Error('Failed to download rendered image');
+                const blob = await response.blob();
+                objectUrl = URL.createObjectURL(blob);
+                link.href = objectUrl;
+            }
+
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+        } catch (error) {
+            console.error('Export failed', error);
+        } finally {
+            document.body.removeChild(link);
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        }
+    };
 
     const runGeneration= async (item: DesignItem)=>{
         if(!id||!item.sourceImage) return;
@@ -139,7 +169,7 @@ const VisualizerId = () => {
                          <div className="panel-actions">
                              <Button
                                  size="sm"
-                                 onClick={()=>{}}
+                                 onClick={handleExport}
                                  className="export"
                                  disabled={!currentImage}
                              >
@@ -176,6 +206,37 @@ const VisualizerId = () => {
                          </div>
 
                      </div>
+                     {/*react slider starts*/}
+                     <div className="panel compare">
+                         <div className="panel-header">
+                             <div className="panel-meta">
+                                 <p>Comparison</p>
+                                 <h3>Before and After</h3>
+                             </div>
+                             <div className="hint"> Drag to compare</div>
+                         </div>
+                         <div className="compare-stage">
+                             {project?.sourceImage && currentImage ? (
+                                 <ReactCompareSlider
+                                     defaultValue={50}
+                                     style={{width:'100%',height:'auto'}}
+                                     itemOne={
+                                     <ReactCompareSliderImage src={project?.sourceImage}alt="before" className="compare-img"/>
+                                     }
+                                     itemTwo={
+                                         <ReactCompareSliderImage src={currentImage}alt="after" className="compare-img"/>
+                                     }
+                                 />
+                             ):(
+                                 <div className="compare-fallback">
+                                     {project?.sourceImage && (
+                                         <img src={project.sourceImage} alt="Before" className="compare-img"/>
+                                     )}
+                                 </div>
+                             )}
+                         </div>
+                     </div>
+                 {/*    reacter slider ends*/}
                  </section>
 
             </div>
